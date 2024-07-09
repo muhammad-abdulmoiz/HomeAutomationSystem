@@ -42,6 +42,14 @@ class SmartDeviceFactory(SmartDeviceFactoryInterface):
                 return DoorLock()
             elif device_name == "air conditioner":
                 return AirConditioner()
+            elif device_name == "thermostat":
+                return ThermostatAdapter(SmartThermostat())
+            elif device_name == "phanos":
+                phanos = Phanos()
+                phanos.add_light(NamedLight("blue"))
+                phanos.add_light(NamedLight("red"))
+                phanos.add_light(NamedLight("orange"))
+                return phanos
             else:
                 raise ValueError("Device name is not valid.")
         except ValueError as e:
@@ -57,6 +65,15 @@ class SmartDevice(ABC):
 class Light(SmartDevice):
     def operate(self, action):
         return f"Light is {action}."
+
+
+class NamedLight(Light):
+    def __init__(self, name):
+        self.name = name
+
+    def operate(self, action):
+        # Call the superclass method and append the name
+        return f"{self.name.capitalize()} {super().operate(action)}"
 
 
 class CeilingFan(SmartDevice):
@@ -77,6 +94,41 @@ class DoorLock(SmartDevice):
 class AirConditioner(SmartDevice):
     def operate(self, action):
         return f"Air conditioner is {action}."
+
+
+# Implementation of Adapter Structural Pattern
+class ThermostatAdapter(SmartDevice):
+    def __init__(self, thermostat):
+        self.thermostat = thermostat
+
+    def operate(self, action):
+        words = action.split()
+        temperature = " ".join(words[3:5])
+        return self.thermostat.set_temperature(temperature)
+
+
+class SmartThermostat:
+    @staticmethod
+    def set_temperature(temperature):
+        return f"Thermostat temperature set to {temperature}."
+
+
+class Phanos(SmartDevice):
+    def __init__(self):
+        self._lights = []
+
+    def add_light(self, light):
+        self._lights.append(light)
+
+    def remove_light(self, light):
+        self._lights.remove(light)
+
+    def operate(self, action):
+        results = []
+        for light in self._lights:
+            results.append(light.operate(action))
+        results.append(f"Phanos with all lights {action}.")
+        return results
 
 
 class Task:
@@ -116,7 +168,7 @@ class ScheduleBuilder:
             f"At {task.time}, {task.action} {task.device_name}")
 
     def get_schedule(self):
-        for device_name, tasks in self.tasks.items():
+        for tasks in self.tasks.values():
             for task in tasks:
                 self.schedule.add_task(task)
         return self.schedule
@@ -150,6 +202,8 @@ class Director:
             Task("dining_room_light", "18:30", "turn on"))
         builder.add_task_to_builder(
             Task("kitchen_light", "19:00", "turn off"))
+        builder.add_task_to_builder(
+            Task("thermostat", "19:30", "set temperature to 22 C of"))
 
         return builder.get_schedule()
 
@@ -163,11 +217,12 @@ class Director:
             Task("bedroom_light", "21:30", "dim to 50%"))
         builder.add_task_to_builder(
             Task("air_conditioner", "21:30", "turn on"))
+        builder.add_task_to_builder(Task("phanos", "22:00", "turn on"))
 
         return builder.get_schedule()
 
 
-class SmartHomeManager:
+class SmartHomeManagerFacade:
     def __init__(self):
         self.controller = DeviceController()
         self.device_factory = SmartDeviceFactory()
@@ -194,6 +249,11 @@ class SmartHomeManager:
         self.controller.add_device("air_conditioner",
                                    self.device_factory.get_device(
                                        "air conditioner"))
+        self.controller.add_device("thermostat",
+                                   self.device_factory.get_device(
+                                       "thermostat"))
+        self.controller.add_device("phanos", self.device_factory.get_device(
+            "phanos"))
 
     def create_and_execute_schedules(self):
         morning_schedule = Director.construct_morning_schedule()
@@ -236,5 +296,5 @@ class SmartHomeManager:
 
 
 if __name__ == "__main__":
-    manager = SmartHomeManager()
+    manager = SmartHomeManagerFacade()
     manager.create_and_execute_schedules()
