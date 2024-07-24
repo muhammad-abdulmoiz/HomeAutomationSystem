@@ -16,11 +16,9 @@ class DeviceController:
     def get_device(self, device_name):
         return self.device_registry[device_name]
 
-    def execute_device_operation(self, device_name, action):
-        device = self.get_device(device_name)
-        if device:
-            return device.operate(action)
-        return "Invalid: Device does not exist."
+    @staticmethod
+    def execute_command(command):
+        return command.execute()
 
 
 class SmartDeviceFactoryInterface(ABC):
@@ -113,6 +111,7 @@ class SmartThermostat:
         return f"Thermostat temperature set to {temperature}."
 
 
+# Implementation of Composite Structural Pattern
 class Phanos(SmartDevice):
     def __init__(self):
         self._lights = []
@@ -222,6 +221,72 @@ class Director:
         return builder.get_schedule()
 
 
+# Implementation of Command Behavioral Design Pattern
+class CommandInterface(ABC):
+    @abstractmethod
+    def execute(self):
+        pass
+
+
+# Concrete Commands
+class TurnOnCommand(CommandInterface):
+    def __init__(self, device):
+        self.device = device
+
+    def execute(self):
+        return self.device.operate("turn on")
+
+
+class TurnOffCommand(CommandInterface):
+    def __init__(self, device):
+        self.device = device
+
+    def execute(self):
+        return self.device.operate("turn off")
+
+
+class DimLightCommand(CommandInterface):
+    def __init__(self, device, level):
+        self.device = device
+        self.level = level
+
+    def execute(self):
+        return self.device.operate(f"dim to {self.level}%")
+
+
+class StartRecordingCommand(CommandInterface):
+    def __init__(self, device):
+        self.device = device
+
+    def execute(self):
+        return self.device.operate("start")
+
+
+class StopRecordingCommand(CommandInterface):
+    def __init__(self, device):
+        self.device = device
+
+    def execute(self):
+        return self.device.operate("stop recording")
+
+
+class EngageLockCommand(CommandInterface):
+    def __init__(self, device):
+        self.device = device
+
+    def execute(self):
+        return self.device.operate("engage")
+
+
+class SetTemperatureCommand(CommandInterface):
+    def __init__(self, device, temperature):
+        self.device = device
+        self.temperature = temperature
+
+    def execute(self):
+        return self.device.operate(f"set temperature to {self.temperature}")
+
+
 class SmartHomeManagerFacade:
     def __init__(self):
         self.controller = DeviceController()
@@ -277,9 +342,35 @@ class SmartHomeManagerFacade:
         for task in schedule.tasks:
             device_name = task.split()[-1]
             action = self.extract_action(task)
-            print(self.controller.execute_device_operation(device_name,
-                                                           action))
+            command = self.create_command(device_name, action)
+            if command:
+                print(self.controller.execute_command(command))
+            else:
+                print(f"Invalid command for task: {task}")
         print("--- Execution Complete ---")
+
+    def create_command(self, device_name, action):
+        device = self.controller.get_device(device_name)
+        if not device:
+            return None
+
+        if action == "turn on":
+            return TurnOnCommand(device)
+        elif action == "turn off":
+            return TurnOffCommand(device)
+        elif action == "start":
+            return StartRecordingCommand(device)
+        elif action == "stop recording":
+            return StopRecordingCommand(device)
+        elif action == "engage":
+            return EngageLockCommand(device)
+        elif action.startswith("set temperature to"):
+            temperature = action.split("set temperature to ")[1]
+            return SetTemperatureCommand(device, temperature)
+        elif action.startswith("dim to"):
+            level = action.split("dim to ")[1].replace("%", "")
+            return DimLightCommand(device, level)
+        return None
 
     @staticmethod
     def extract_action(sentence):
